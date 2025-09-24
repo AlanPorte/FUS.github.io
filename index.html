@@ -1,8 +1,223 @@
-<html>
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>STM32WB FUS Firmware Upgrade Procedure</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    line-height: 1.6;
+    max-width: 900px;
+  }
+  h1, h2 {
+    color: #004080;
+  }
+  .warning {
+    background-color: #fff3cd;
+    border-left: 6px solid #ffeeba;
+    padding: 10px;
+    margin-bottom: 20px;
+  }
+  label {
+    font-weight: bold;
+    display: block;
+    margin-top: 15px;
+  }
+  input[type="text"], input[type="number"] {
+    width: 300px;
+    padding: 6px;
+    font-size: 1em;
+  }
+  button {
+    margin-top: 15px;
+    padding: 10px 20px;
+    background-color: #004080;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  button:hover {
+    background-color: #0066cc;
+  }
+  .result {
+    margin-top: 15px;
+    font-weight: bold;
+    color: #004080;
+  }
+  pre {
+    background-color: #f4f4f4;
+    padding: 15px;
+    border-left: 4px solid #004080;
+    overflow-x: auto;
+  }
+</style>
+</head>
 <body>
-  <h1>Alan</h1>
-  <p>Welcome to my website!</p>
-</body>
 
+<h1>STM32WB Firmware Upgrade Procedure</h1>
+
+<div class="warning">
+  <strong>Warning:</strong> For Coprocessor Binaries marked as <em>“FUS_v2 only”</em> in the Wireless Coprocessor Binary Table, 
+  with CubeProgrammer version ≤ v2.19x, the <em>start address</em> provided by CubeProgrammer under <em>Firmware upgrade services</em> must be corrected as follows: 
+  <br><br>
+  <code>start_address = (start_address - 0x4000)</code>.<br><br>
+  The addresses provided in the table are correct only if no Coprocessor Binary marked as “FUS_v2 only” has been installed previously. Otherwise, legacy binaries’ addresses must also be corrected by applying the formula above the first time.
+</div>
+
+<h2>Input Fields</h2>
+
+<form id="fusForm" onsubmit="return false;">
+  <label for="version">CubeProgrammer Version (e.g. 2.19.0):</label>
+  <input type="text" id="version" name="version" placeholder="Enter CubeProgrammer version" required pattern="^\d+\.\d+\.\d+$" title="Format: x.xx.x (e.g. 2.19.0)" />
+
+  <label for="binaryName">Binary File Path:</label>
+  <input type="text" id="binaryName" name="binaryName" placeholder="e.g. stm32wb5x_FUS_fw.bin" required />
+
+  <label for="startAddress">Start Address (hex, e.g. 0x08040000):</label>
+  <input type="text" id="startAddress" name="startAddress" placeholder="Enter start address in hex" required pattern="^0x[0-9a-fA-F]+$" title="Hexadecimal format starting with 0x" />
+
+  <label for="previousFUS">Previously installed binary marked as “FUS_v2 only”?</label>
+  <select id="previousFUS" name="previousFUS">
+    <option value="no" selected>No</option>
+    <option value="yes">Yes</option>
+  </select>
+
+  <button type="button" onclick="calculateCorrectedAddress()">Calculate Corrected Start Address</button>
+</form>
+
+<div class="result" id="correctedAddressResult"></div>
+
+<h2>Upgrade Procedure Steps</h2>
+
+<pre>
+STEP 1: Use STM32CubeProgrammer GUI
+- Version 2.20.0 or higher.
+- Access Firmware Upgrade Service (FUS) through Bootloader.
+- Available in GUI or CLI mode.
+
+STEP 2: Access to SWD Interface (system flash)
+- For P-NUCLEO-WB55.Nucleo:
+  Power ON via ST-LINK and Jumper JP1(USB_STL)
+- For P-NUCLEO-WB55.USBDongle:
+  Switch SW2 to Boot1, connect device
+- For STM32WB5MM-DK:
+  Power ON via ST-LINK and Jumper JP2(USB_STL)
+  Open STM32CubeProgrammer GUI, select "ST-LINK"
+  Configure Port: SWD, then select "Connect"
+
+STEP 3: Select "Start FUS" in Firmware Upgrade Services
+
+STEP 4: Read and upgrade FUS Version
+- Read FUS infos (see Warning above)
+- Follow incremental upgrade steps:
+  - 00050300: FUSv0.5.3 => Update to FUSv1.2.0 using STEP 5
+  - 010X0Y00: FUSv1.x.y (x<2) => Update to FUSv1.2.0 using STEP 6
+  - 01020X00: FUSv1.2.0 => Update to latest FUS using STEP 7
+  - 02000X00: FUSv2.1.0 => Up to date, download new wireless stack or safeboot using STEP 8
+
+STEP 5: Download FUS v1.2.0 for FUSv0.5.3 upgrade
+- Firmware Upgrade Services:
+  File Path: [stm32wb5x_FUS_fw_for_fus_0_5_3.bin]
+  Start Address: [Install@]
+- Select "Firmware Upgrade"
+
+STEP 6: Download FUS v1.2.0 for FUSv1.x.y upgrade (x<2)
+- Firmware Upgrade Services:
+  File Path: [stm32wb5x_FUS_fw_1_2_0.bin]
+  Start Address: [Install@]
+- Select "Firmware Upgrade"
+
+STEP 7: Download latest FUS for FUSv1.2.0 upgrade
+- Firmware Upgrade Services:
+  File Path: [stm32wb5x_FUS_fw.bin]
+  Start Address: [Install@]
+- Select "Firmware Upgrade"
+
+STEP 8: Download new wireless stack or safeboot
+- Firmware Upgrade Service:
+  File Path: [Wireless_Coprocessor_Binary]
+  Start Address: [Install@]
+- Select "Firmware Upgrade" (with "Verify download" and "Start stack after upgrade")
+- Optionally activate "Anti-Rollback"
+- Always start FUS if not running
+
+STEP 9: Revert to default configuration
+- In Option Bytes menu for User Configuration set:
+  nSWboot0=1 (checked)
+  nboot1=1
+  nboot0=1
+</pre>
+
+<script>
+  function parseVersion(versionStr) {
+    // Parse version string like "2.19.0" into array of numbers [2,19,0]
+    return versionStr.split('.').map(num => parseInt(num, 10));
+  }
+
+  function versionLessOrEqual(v1, v2) {
+    // Compare two version arrays, return true if v1 <= v2
+    for (let i = 0; i < v1.length; i++) {
+      if (v1[i] < v2[i]) return true;
+      if (v1[i] > v2[i]) return false;
+    }
+    return true; // equal
+  }
+
+  function calculateCorrectedAddress() {
+    const versionInput = document.getElementById('version').value.trim();
+    const binaryName = document.getElementById('binaryName').value.trim();
+    const startAddressInput = document.getElementById('startAddress').value.trim();
+    const previousFUS = document.getElementById('previousFUS').value;
+
+    const resultDiv = document.getElementById('correctedAddressResult');
+    resultDiv.textContent = '';
+
+    // Validate inputs
+    const versionPattern = /^\d+\.\d+\.\d+$/;
+    if (!versionPattern.test(versionInput)) {
+      alert('Please enter CubeProgrammer version in format x.xx.x (e.g. 2.19.0)');
+      return;
+    }
+    const startAddressPattern = /^0x[0-9a-fA-F]+$/;
+    if (!startAddressPattern.test(startAddressInput)) {
+      alert('Please enter start address in hexadecimal format starting with 0x');
+      return;
+    }
+
+    // Parse version and start address
+    const version = parseVersion(versionInput);
+    const limitVersion = [2, 19, 9]; // v2.19.x (assuming x=9 max)
+    const startAddress = parseInt(startAddressInput, 16);
+
+    // Check if CubeProgrammer version <= 2.19.x
+    const isVersionOld = versionLessOrEqual(version, limitVersion);
+
+    // Determine if correction needed
+    // Correction needed if version <= 2.19.x AND (previousFUS == yes OR binary marked "FUS_v2 only")
+    // Since we don't have binary table here, ask user to confirm previousFUS
+    if (isVersionOld && previousFUS === 'yes') {
+      const correctedAddress = startAddress - 0x4000;
+      if (correctedAddress < 0) {
+        resultDiv.textContent = 'Error: Corrected address would be negative. Please check inputs.';
+        return;
+      }
+      resultDiv.innerHTML = `
+        For CubeProgrammer version ${versionInput} and previously installed "FUS_v2 only" binary:<br>
+        <strong>Original Start Address:</strong> ${startAddressInput}<br>
+        <strong>Corrected Start Address:</strong> 0x${correctedAddress.toString(16).toUpperCase().padStart(8, '0')}<br><br>
+        Please use the corrected start address for Firmware Upgrade Services.
+      `;
+    } else {
+      resultDiv.innerHTML = `
+        No correction needed for CubeProgrammer version ${versionInput} with current conditions.<br>
+        <strong>Start Address to use:</strong> ${startAddressInput}
+      `;
+    }
+  }
+</script>
+
+</body>
 </html>
